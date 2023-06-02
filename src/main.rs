@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use macroquad::prelude::*;
+use egui_macroquad::egui;
 
 fn window_conf() -> Conf {
 	return Conf {
@@ -117,14 +118,20 @@ impl Cell {
 		self.offset.1 = self.offset.1 + (self.wanted_offset.1 - self.offset.1) / 5.0;
 	}
 
-	fn kill(&mut self) {
+	fn kill(&mut self, animations: bool) {
 		self.state = CellState::Dead;
 		self.wanted_offset = (self.w/2.0, -self.w);
+		if !animations {
+			self.offset = self.wanted_offset;
+		}
 	}
 
-	fn live(&mut self) {
+	fn live(&mut self, animations: bool) {
 		self.state = CellState::Alive;
 		self.wanted_offset = (0.0, 0.0);
+		if !animations {
+			self.offset = self.wanted_offset;
+		}
 	}
 	
 }
@@ -187,8 +194,8 @@ impl Game {
 				let cell = self.get_cell_mut(x2, y2).unwrap();
 				if x > cell.x && y > cell.y && x < cell.x + cell.w && y < cell.y + cell.w {
 					match button {
-						MouseButton::Right => cell.kill(),
-						MouseButton::Left => cell.live(),
+						MouseButton::Right => cell.kill(true),
+						MouseButton::Left => cell.live(true),
 						_ => ()
 					};
 				}
@@ -234,7 +241,7 @@ impl Game {
 		}
 	}
 
-	fn update(&mut self) {
+	fn update(&mut self, animations: bool) {
 
 		if self.paused || self.last_update.elapsed().as_millis() as f32 / 1000.0 < self.speed {
 
@@ -268,15 +275,15 @@ impl Game {
 							}
 	
 							if amount < 2 {
-								cell.kill();
+								cell.kill(animations);
 							} else if amount > 3 {
-								cell.kill();
+								cell.kill(animations);
 							}
 	
 						},
 						CellState::Dead => {
 							if amount == 3 {
-								cell.live();
+								cell.live(animations);
 								continue;
 							}
 						}
@@ -293,29 +300,78 @@ impl Game {
 
 }
 
+struct Settings {
+	mouse_over: bool,
+	speed: f32,
+	animate_while_sim: bool,
+	size: f32,
+}
+
+impl Settings {
+
+	fn new() -> Self {
+		return Self {
+			mouse_over: false,
+			speed: 0.75,
+			animate_while_sim: true,
+			size: 20.0,
+		};
+	}
+
+	fn draw(&mut self) {
+		egui_macroquad::ui(|ctx| {
+			self.mouse_over = ctx.is_pointer_over_area() || ctx.is_using_pointer();
+			egui::Window::new("Settings")
+				.default_pos(egui::pos2(0.0, 0.0))
+				.show(ctx, |ui| {
+
+					ui.spacing_mut().slider_width = 200.0;
+
+					ui.add(egui::Slider::new(&mut self.speed, 0.05..=1.0).text("Speed").show_value(false));
+					ui.add(egui::Slider::new(&mut self.size, 10.0..=30.0).text("Size").show_value(false));
+
+					ui.checkbox(&mut self.animate_while_sim, "Animations while simulating");
+
+				});
+		});
+		egui_macroquad::draw();
+
+	}
+}
+
 #[macroquad::main(window_conf)]
 async fn main() {
 
 	let mut game = Game::new(20.0);
+	let mut settings = Settings::new();
 
 	loop {
 
 		clear_background(BLACK);
 
-		let pos = mouse_position();
-		if is_mouse_button_down(MouseButton::Left) {
-			game.handle_mouse(pos.0, pos.1, MouseButton::Left);
+		if settings.size != game.get_cell(0, 0).unwrap().w {
+			game = Game::new(settings.size);
+			
 		}
-		if is_mouse_button_down(MouseButton::Right) {
-			game.handle_mouse(pos.0, pos.1, MouseButton::Right);
+
+		let pos = mouse_position();
+		if !settings.mouse_over {
+			if is_mouse_button_down(MouseButton::Left) {
+				game.handle_mouse(pos.0, pos.1, MouseButton::Left);
+			}
+			if is_mouse_button_down(MouseButton::Right) {
+				game.handle_mouse(pos.0, pos.1, MouseButton::Right);
+			}
 		}
 
 		if is_key_pressed(KeyCode::Space) {
 			game.toggle_pause();
 		}
 
-		game.update();
+		game.speed = 1.0 - settings.speed;
+		game.update(settings.animate_while_sim);
 		game.draw();
+		settings.draw();
 
 		next_frame().await;
 
