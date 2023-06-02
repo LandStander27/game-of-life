@@ -261,14 +261,14 @@ impl Game {
 
 	}
 
-	fn handle_mouse(&mut self, x: f32, y: f32, button: MouseButton) {
+	fn handle_mouse(&mut self, x: f32, y: f32, button: MouseButton, animation: bool) {
 		for x2 in 0..self.amount.amount_x {
 			for y2 in 0..self.amount.amount_y {
 				let cell = self.get_cell_mut(x2, y2).unwrap();
 				if x > cell.x && y > cell.y && x < cell.x + cell.w && y < cell.y + cell.w {
 					match button {
-						MouseButton::Right => cell.kill(true),
-						MouseButton::Left => cell.live(true),
+						MouseButton::Right => cell.kill(animation),
+						MouseButton::Left => cell.live(animation),
 						_ => ()
 					};
 				}
@@ -379,10 +379,21 @@ impl Game {
 
 }
 
+#[cfg(target_family = "wasm")]
+fn on_web() -> bool {
+	return true;
+}
+
+#[cfg(target_family = "windows")]
+fn on_web() -> bool {
+	return false;
+}
+
 struct Settings {
 	mouse_over: bool,
 	speed: f64,
 	animate_while_sim: bool,
+	animate: bool,
 	size: f32,
 	clear_screen: bool,
 	paused: bool,
@@ -400,6 +411,7 @@ impl Settings {
 			clear_screen: false,
 			paused: true,
 			swap_buttons: false,
+			animate: true,
 		};
 	}
 
@@ -430,7 +442,11 @@ impl Settings {
 					ui.add(egui::Slider::new(&mut self.speed, 0.05..=1.0).text("Speed").show_value(false));
 					ui.add(egui::Slider::new(&mut self.size, 10.0..=30.0).text("Size").show_value(false));
 
-					ui.checkbox(&mut self.animate_while_sim, "Animations while simulating");
+					if on_web() {
+						ui.checkbox(&mut self.animate, "Animations (can reduce lag on web)");
+					}
+					
+					ui.add_enabled(self.animate, egui::Checkbox::new(&mut self.animate_while_sim, "Animations while simulating"));
 
 					ui.heading("Controls");
 
@@ -484,11 +500,11 @@ async fn main() {
 				if last_mouse_pos.is_some() {
 					let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
 					for i in points {
-						game.handle_mouse(i.x as f32, i.y as f32, wanted);
+						game.handle_mouse(i.x as f32, i.y as f32, wanted, settings.animate);
 					}
 				}
 
-				game.handle_mouse(pos.0, pos.1, wanted);
+				game.handle_mouse(pos.0, pos.1, wanted, settings.animate);
 				last_mouse_pos = Some(pos);
 			} else if is_mouse_button_down(MouseButton::Right) {
 
@@ -501,15 +517,18 @@ async fn main() {
 				if last_mouse_pos.is_some() {
 					let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
 					for i in points {
-						game.handle_mouse(i.x as f32, i.y as f32, wanted);
+						game.handle_mouse(i.x as f32, i.y as f32, wanted, settings.animate);
 					}
 				}
 
-				game.handle_mouse(pos.0, pos.1, wanted);
+				game.handle_mouse(pos.0, pos.1, wanted, settings.animate);
 				last_mouse_pos = Some(pos);
 			} else {
 				last_mouse_pos = None;
 			}
+		}
+		if is_mouse_button_released(MouseButton::Left) || is_mouse_button_released(MouseButton::Right) {
+			last_mouse_pos = None;
 		}
 
 		if is_key_pressed(KeyCode::Space) {
@@ -519,7 +538,7 @@ async fn main() {
 		game.set_pause(settings.paused);
 
 		game.speed = 1.0 - settings.speed;
-		game.update(settings.animate_while_sim);
+		game.update(if !settings.animate { false } else { settings.animate_while_sim });
 		game.draw();
 		settings.draw();
 
