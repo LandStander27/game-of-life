@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use macroquad::prelude::*;
 use egui_macroquad::egui;
 
@@ -217,8 +215,8 @@ struct Game {
 	amount: Amount,
 	paused: bool,
 	draw_grid: bool,
-	speed: f32,
-	last_update: Instant,
+	speed: f64,
+	last_update: f64,
 }
 
 impl Game {
@@ -241,7 +239,7 @@ impl Game {
 			paused: true,
 			draw_grid: true,
 			speed: 0.25,
-			last_update: Instant::now(),
+			last_update: macroquad::miniquad::date::now(),
 		};
 	}
 
@@ -323,7 +321,8 @@ impl Game {
 
 	fn update(&mut self, animations: bool) {
 
-		if self.paused || self.last_update.elapsed().as_millis() as f32 / 1000.0 < self.speed {
+		// if self.paused || self.last_update.elapsed().as_millis() as f32 / 1000.0 < self.speed {
+		if self.paused || macroquad::miniquad::date::now() - self.last_update < self.speed {
 
 			for x in 0..self.amount.amount_x {
 				for y in 0..self.amount.amount_y {
@@ -332,7 +331,7 @@ impl Game {
 			}
 
 		} else {
-			self.last_update = Instant::now();
+			self.last_update = macroquad::miniquad::date::now();
 			let board = self.cells.clone();
 
 			for x in 0..self.amount.amount_x {
@@ -382,11 +381,12 @@ impl Game {
 
 struct Settings {
 	mouse_over: bool,
-	speed: f32,
+	speed: f64,
 	animate_while_sim: bool,
 	size: f32,
 	clear_screen: bool,
 	paused: bool,
+	swap_buttons: bool,
 }
 
 impl Settings {
@@ -399,14 +399,15 @@ impl Settings {
 			size: 20.0,
 			clear_screen: false,
 			paused: true,
+			swap_buttons: false,
 		};
 	}
 
 	fn draw(&mut self) {
 		egui_macroquad::ui(|ctx| {
 			self.mouse_over = ctx.is_pointer_over_area() || ctx.is_using_pointer();
-			egui::Window::new("")
-				.title_bar(false)
+			egui::Window::new("Menu")
+				.title_bar(true)
 				.default_pos(egui::pos2(0.0, 0.0))
 				.show(ctx, |ui| {
 
@@ -416,6 +417,9 @@ impl Settings {
 						}
 						if ui.button("Clear screen").clicked() {
 							self.clear_screen = true;
+						}
+						if ui.button("Swap").clicked() {
+							self.swap_buttons = !self.swap_buttons;
 						}
 					});
 
@@ -430,8 +434,8 @@ impl Settings {
 
 					ui.heading("Controls");
 
-					let controls = "
-Space to play/pause
+					let controls = 
+"Space to play/pause
 Left click to create
 Right click to remove
 Q to clear screen";
@@ -471,25 +475,37 @@ async fn main() {
 		if !settings.mouse_over {
 			if is_mouse_button_down(MouseButton::Left) {
 
+				let wanted = if !settings.swap_buttons {
+					MouseButton::Left
+				} else {
+					MouseButton::Right
+				};
+
 				if last_mouse_pos.is_some() {
 					let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
 					for i in points {
-						game.handle_mouse(i.x as f32, i.y as f32, MouseButton::Left);
+						game.handle_mouse(i.x as f32, i.y as f32, wanted);
 					}
 				}
 
-				game.handle_mouse(pos.0, pos.1, MouseButton::Left);
+				game.handle_mouse(pos.0, pos.1, wanted);
 				last_mouse_pos = Some(pos);
 			} else if is_mouse_button_down(MouseButton::Right) {
 
+				let wanted = if !settings.swap_buttons {
+					MouseButton::Right
+				} else {
+					MouseButton::Left
+				};
+
 				if last_mouse_pos.is_some() {
 					let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
 					for i in points {
-						game.handle_mouse(i.x as f32, i.y as f32, MouseButton::Right);
+						game.handle_mouse(i.x as f32, i.y as f32, wanted);
 					}
 				}
 
-				game.handle_mouse(pos.0, pos.1, MouseButton::Right);
+				game.handle_mouse(pos.0, pos.1, wanted);
 				last_mouse_pos = Some(pos);
 			} else {
 				last_mouse_pos = None;
