@@ -12,6 +12,81 @@ fn window_conf() -> Conf {
 	};
 }
 
+#[derive(Debug, Clone, Copy)]
+struct Point {
+	x: i32,
+	y: i32
+}
+
+fn plot_high(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<Point> {
+	let mut dx = x1 - x0;
+	let dy = y1 - y0;
+	let mut xi = 1;
+	if dx < 0 {
+		xi = -1;
+		dx = -dx;
+	}
+	let mut d = (2 * dx) - dy;
+	let mut x = x0;
+
+	let mut points: Vec<Point> = Vec::new();
+
+	for y in y0..=y1 {
+		points.push(Point { x: x, y: y });
+		if d > 0 {
+			x = x + xi;
+			d = d + (2 * (dx - dy));
+		} else {
+			d = d + 2*dx;
+		}
+	}
+	return points;
+}
+
+
+fn plot_low(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<Point> {
+
+	let dx = x1 - x0;
+	let mut dy = y1 - y0;
+	let mut yi = 1;
+	if dy < 0 {
+		yi = -1;
+		dy = -dy;
+	}
+	let mut d = (2 * dy) - dx;
+	let mut y = y0;
+
+	let mut points: Vec<Point> = Vec::new();
+
+	for x in x0..=x1 {
+		points.push(Point { x: x, y: y });
+		if d > 0 {
+			y = y + yi;
+			d = d + (2 * (dy - dx));
+		} else {
+			d = d + 2*dy;
+		}
+	}
+	return points;
+}
+
+
+fn plot_line(x0: f32, y0: f32, x1: f32, y1: f32) -> Vec<Point> {
+	if (y1 - y0).abs() < (x1 - x0).abs() {
+		if x0 > x1 {
+			return plot_low(x1.round() as i32, y1.round() as i32, x0.round() as i32, y0.round() as i32);
+		} else {
+			return plot_low(x0.round() as i32, y0.round() as i32, x1.round() as i32, y1.round() as i32);
+		}
+	} else {
+		if y0 > y1 {
+			return plot_high(x1.round() as i32, y1.round() as i32, x0.round() as i32, y0.round() as i32);
+		} else {
+			return plot_high(x0.round() as i32, y0.round() as i32, x1.round() as i32, y1.round() as i32);
+		}
+	}
+}
+
 #[derive(Debug, Copy, Clone)]
 struct Amount {
 	amount_x: i32,
@@ -105,7 +180,7 @@ impl Cell {
 
 		if self.state == CellState::Dead {
 			if draw_grid {
-				draw_rectangle_lines(self.x, self.y, self.w, self.w, 0.25, GRAY);
+				draw_rectangle_lines(self.x, self.y, self.w, self.w, 0.25, DARKGRAY);
 			} else {
 				draw_rectangle(self.x, self.y, self.w, self.w, BLACK);
 			}
@@ -208,6 +283,11 @@ impl Game {
 		self.paused = !self.paused;
 	}
 
+	fn set_pause(&mut self, paused: bool) {
+		self.draw_grid = paused;
+		self.paused = paused;
+	}
+
 	fn amount_around(&self, x: i32, y: i32, board: &Vec<Vec<Cell>>) -> u32 {
 
 		let mut amount = 0;
@@ -305,6 +385,8 @@ struct Settings {
 	speed: f32,
 	animate_while_sim: bool,
 	size: f32,
+	clear_screen: bool,
+	paused: bool,
 }
 
 impl Settings {
@@ -315,15 +397,29 @@ impl Settings {
 			speed: 0.75,
 			animate_while_sim: true,
 			size: 20.0,
+			clear_screen: false,
+			paused: true,
 		};
 	}
 
 	fn draw(&mut self) {
 		egui_macroquad::ui(|ctx| {
 			self.mouse_over = ctx.is_pointer_over_area() || ctx.is_using_pointer();
-			egui::Window::new("Settings")
+			egui::Window::new("")
+				.title_bar(false)
 				.default_pos(egui::pos2(0.0, 0.0))
 				.show(ctx, |ui| {
+
+					ui.horizontal(|ui| {
+						if ui.button("Play/pause").clicked() {
+							self.paused = !self.paused;
+						}
+						if ui.button("Clear screen").clicked() {
+							self.clear_screen = true;
+						}
+					});
+
+					ui.heading("Options");
 
 					ui.spacing_mut().slider_width = 200.0;
 
@@ -331,6 +427,18 @@ impl Settings {
 					ui.add(egui::Slider::new(&mut self.size, 10.0..=30.0).text("Size").show_value(false));
 
 					ui.checkbox(&mut self.animate_while_sim, "Animations while simulating");
+
+					ui.heading("Controls");
+
+					let controls = "
+Space to play/pause
+Left click to create
+Right click to remove
+Q to clear screen";
+					for i in controls.split("\n") {
+						ui.label(i);
+					}
+
 
 				});
 		});
@@ -345,28 +453,54 @@ async fn main() {
 	let mut game = Game::new(20.0);
 	let mut settings = Settings::new();
 
+	let mut last_mouse_pos: Option<(f32, f32)> = None;
+
 	loop {
 
 		clear_background(BLACK);
 
 		if settings.size != game.get_cell(0, 0).unwrap().w {
 			game = Game::new(settings.size);
-			
+		}
+		if settings.clear_screen || is_key_pressed(KeyCode::Q) {
+			settings.clear_screen = false;
+			game = Game::new(settings.size);
 		}
 
 		let pos = mouse_position();
 		if !settings.mouse_over {
 			if is_mouse_button_down(MouseButton::Left) {
+
+				if last_mouse_pos.is_some() {
+					let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
+					for i in points {
+						game.handle_mouse(i.x as f32, i.y as f32, MouseButton::Left);
+					}
+				}
+
 				game.handle_mouse(pos.0, pos.1, MouseButton::Left);
-			}
-			if is_mouse_button_down(MouseButton::Right) {
+				last_mouse_pos = Some(pos);
+			} else if is_mouse_button_down(MouseButton::Right) {
+
+				if last_mouse_pos.is_some() {
+					let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
+					for i in points {
+						game.handle_mouse(i.x as f32, i.y as f32, MouseButton::Right);
+					}
+				}
+
 				game.handle_mouse(pos.0, pos.1, MouseButton::Right);
+				last_mouse_pos = Some(pos);
+			} else {
+				last_mouse_pos = None;
 			}
 		}
 
 		if is_key_pressed(KeyCode::Space) {
 			game.toggle_pause();
+			settings.paused = game.paused;
 		}
+		game.set_pause(settings.paused);
 
 		game.speed = 1.0 - settings.speed;
 		game.update(settings.animate_while_sim);
