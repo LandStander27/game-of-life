@@ -398,6 +398,7 @@ struct Settings {
 	clear_screen: bool,
 	paused: bool,
 	swap_buttons: bool,
+	reduce_lag: bool,
 }
 
 impl Settings {
@@ -412,6 +413,7 @@ impl Settings {
 			paused: true,
 			swap_buttons: false,
 			animate: true,
+			reduce_lag: false,
 		};
 	}
 
@@ -443,8 +445,10 @@ impl Settings {
 					ui.add(egui::Slider::new(&mut self.size, 10.0..=30.0).text("Size").show_value(false));
 
 					if on_web() {
-						ui.checkbox(&mut self.animate, "Animations (can reduce lag on web)");
+						ui.checkbox(&mut self.reduce_lag, "Reduce lag");
 					}
+
+					ui.checkbox(&mut self.animate, "Animations");
 					
 					ui.add_enabled(self.animate, egui::Checkbox::new(&mut self.animate_while_sim, "Animations while simulating"));
 
@@ -497,12 +501,15 @@ async fn main() {
 					MouseButton::Right
 				};
 
-				if last_mouse_pos.is_some() {
-					let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
-					for i in points {
-						game.handle_mouse(i.x as f32, i.y as f32, wanted, settings.animate);
+				if !settings.reduce_lag {
+					if last_mouse_pos.is_some() {
+						let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
+						for i in points {
+							game.handle_mouse(i.x as f32, i.y as f32, wanted, settings.animate);
+						}
 					}
 				}
+
 
 				game.handle_mouse(pos.0, pos.1, wanted, settings.animate);
 				last_mouse_pos = Some(pos);
@@ -514,12 +521,15 @@ async fn main() {
 					MouseButton::Left
 				};
 
-				if last_mouse_pos.is_some() {
-					let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
-					for i in points {
-						game.handle_mouse(i.x as f32, i.y as f32, wanted, settings.animate);
+				if !settings.reduce_lag {
+					if last_mouse_pos.is_some() {
+						let points = plot_line(pos.0, pos.1, last_mouse_pos.unwrap().0, last_mouse_pos.unwrap().1);
+						for i in points {
+							game.handle_mouse(i.x as f32, i.y as f32, wanted, settings.animate);
+						}
 					}
 				}
+
 
 				game.handle_mouse(pos.0, pos.1, wanted, settings.animate);
 				last_mouse_pos = Some(pos);
