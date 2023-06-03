@@ -422,6 +422,14 @@ impl Game {
 
 	}
 
+	fn clear_screen(&mut self, animations: bool) {
+		for x in self.cells.iter_mut() {
+			for y in x.iter_mut() {
+				y.kill(animations);
+			}
+		}
+	}
+
 }
 
 #[cfg(target_family = "wasm")]
@@ -564,7 +572,7 @@ async fn main() {
 		}
 		if settings.clear_screen || is_key_pressed(KeyCode::Q) {
 			settings.clear_screen = false;
-			game = Game::new(settings.size);
+			game.clear_screen(settings.animate);
 		}
 
 		let pos = mouse_position();
