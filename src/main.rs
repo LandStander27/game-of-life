@@ -174,24 +174,26 @@ impl Cell {
 		};
 	}
 
-	fn draw(&self, draw_grid: bool) {
+	fn draw(&self, grid_color: Color) {
 
+		draw_rectangle(self.x, self.y, self.w, self.w, BLACK);
+		draw_rectangle_lines(self.x, self.y, self.w, self.w, 0.25, grid_color);
 		draw_rectangle(self.x+self.offset.0, self.y+self.offset.0, self.w+self.offset.1, self.w+self.offset.1, self.color);
 
-		if self.state == CellState::Dead {
-			if draw_grid {
-				draw_rectangle_lines(self.x, self.y, self.w, self.w, 0.25, DARKGRAY);
-			} else {
-				draw_rectangle(self.x, self.y, self.w, self.w, BLACK);
-			}
-		}
+		// if self.state == CellState::Dead {
+		// 	if draw_grid {
+				
+		// 	} else {
+				
+		// 	}
+		// }
 
 	}
 
 	fn update(&mut self) {
 		self.offset.0 = self.offset.0 + (self.wanted_offset.0 - self.offset.0) / 5.0;
 		self.offset.1 = self.offset.1 + (self.wanted_offset.1 - self.offset.1) / 5.0;
-		
+
 		match self.state {
 			CellState::Alive => {
 				self.color.a += (1.0 - self.color.a) / 10.0;
@@ -232,9 +234,10 @@ struct Game {
 	cells: Vec<Vec<Cell>>,
 	amount: Amount,
 	paused: bool,
-	draw_grid: bool,
 	speed: f64,
 	last_update: f64,
+	grid_color: Color,
+	wanted_grid_color: Color,
 }
 
 impl Game {
@@ -255,9 +258,10 @@ impl Game {
 			cells: cells,
 			amount: amount,
 			paused: true,
-			draw_grid: true,
 			speed: 0.25,
 			last_update: macroquad::miniquad::date::now(),
+			grid_color: Color { r: 255.0, g: 255.0, b: 255.0, a: 0.35 },
+			wanted_grid_color: Color { r: 255.0, g: 255.0, b: 255.0, a: 0.35 },
 		};
 	}
 
@@ -295,13 +299,34 @@ impl Game {
 	}
 
 	fn toggle_pause(&mut self) {
-		self.draw_grid = !self.draw_grid;
 		self.paused = !self.paused;
+		// if self.paused {
+		// 	for x in self.cells.iter_mut() {
+		// 		for y in x.iter_mut() {
+		// 			y.wanted_grid_trans = 0.35;
+		// 		}
+		// 	}
+		// } else {
+		// 	for x in self.cells.iter_mut() {
+		// 		for y in x.iter_mut() {
+		// 			y.wanted_grid_trans = 0.0;
+		// 		}
+		// 	}
+		// }
+		if self.paused {
+			self.wanted_grid_color.a = 0.35;
+		} else {
+			self.wanted_grid_color.a = 0.0;
+		}
 	}
 
 	fn set_pause(&mut self, paused: bool) {
-		self.draw_grid = paused;
 		self.paused = paused;
+		if self.paused {
+			self.wanted_grid_color.a = 0.35;
+		} else {
+			self.wanted_grid_color.a = 0.0;
+		}
 	}
 
 	fn amount_around(&self, x: i32, y: i32, board: &Vec<Vec<Cell>>) -> u32 {
@@ -332,12 +357,14 @@ impl Game {
 	fn draw(&self) {
 		for x in 0..self.amount.amount_x {
 			for y in 0..self.amount.amount_y {
-				self.get_cell(x, y).unwrap().draw(self.draw_grid);
+				self.get_cell(x, y).unwrap().draw(self.grid_color);
 			}
 		}
 	}
 
 	fn update(&mut self, animations: bool) {
+
+		self.grid_color.a += (self.wanted_grid_color.a - self.grid_color.a) / 7.5;
 
 		// if self.paused || self.last_update.elapsed().as_millis() as f32 / 1000.0 < self.speed {
 		if self.paused || macroquad::miniquad::date::now() - self.last_update < self.speed {
@@ -417,6 +444,7 @@ struct Settings {
 	paused: bool,
 	swap_buttons: bool,
 	reduce_lag: bool,
+	touch_buttons: bool,
 }
 
 impl Settings {
@@ -432,6 +460,7 @@ impl Settings {
 			swap_buttons: false,
 			animate: true,
 			reduce_lag: false,
+			touch_buttons: false,
 		};
 	}
 
@@ -443,17 +472,15 @@ impl Settings {
 				.default_pos(egui::pos2(0.0, 0.0))
 				.show(ctx, |ui| {
 
-					ui.horizontal(|ui| {
-						if ui.button("Play/pause").clicked() {
-							self.paused = !self.paused;
+					if self.touch_buttons {
+						if ui.button("Hide touch buttons").clicked() {
+							self.touch_buttons = false;
 						}
-						if ui.button("Clear screen").clicked() {
-							self.clear_screen = true;
+					} else {
+						if ui.button("Show touch buttons").clicked() {
+							self.touch_buttons = true;
 						}
-						if ui.button("Swap").clicked() {
-							self.swap_buttons = !self.swap_buttons;
-						}
-					});
+					}
 
 					ui.heading("Options");
 
@@ -483,6 +510,37 @@ Q to clear screen";
 
 
 				});
+
+			if self.touch_buttons {
+				egui::Window::new("Touch buttons")
+				.show(ctx, |ui| {
+					ui.vertical_centered_justified(|ui| {
+						let mut style = (*ctx.style()).clone();
+						style.text_styles = [(egui::TextStyle::Button, egui::FontId::new(24.0, egui::FontFamily::Proportional))].into();
+						ui.style_mut().text_styles = style.text_styles;
+						if ui.button(if self.paused { "Play" } else { "Pause" }).clicked() {
+							self.paused = !self.paused;
+						}
+						if ui.button("Clear screen").clicked() {
+							self.clear_screen = true;
+						}
+						if ui.button("Swap").clicked() {
+							self.swap_buttons = !self.swap_buttons;
+						}
+						// if ui.add(egui::Button::new(if self.paused { "Play" } else { "Pause" }).min_size(egui::Vec2::new(100.0, 24.0))).clicked() {
+						// 	self.paused = !self.paused;
+						// }
+						// if ui.add(egui::Button::new("Clear screen").min_size(egui::Vec2::new(150.0, 24.0))).clicked() {
+						// 	self.clear_screen = true;
+						// }
+						// if ui.add(egui::Button::new("Change tool").min_size(egui::Vec2::new(150.0, 24.0))).clicked() {
+						// 	self.swap_buttons = !self.swap_buttons;
+						// }
+					});
+				});
+			}
+
+
 		});
 		egui_macroquad::draw();
 
