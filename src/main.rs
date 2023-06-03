@@ -158,6 +158,7 @@ struct Cell {
 	state: CellState,
 	offset: (f32, f32),
 	wanted_offset: (f32, f32),
+	color: Color,
 }
 
 impl Cell {
@@ -168,13 +169,14 @@ impl Cell {
 			w: w,
 			state: CellState::Dead,
 			offset: (w/2.0, -w),
+			color: Color { r: 255.0, g: 255.0, b: 255.0, a: 0.0 },
 			wanted_offset: (w/2.0, -w),
 		};
 	}
 
 	fn draw(&self, draw_grid: bool) {
 
-		draw_rectangle(self.x+self.offset.0, self.y+self.offset.0, self.w+self.offset.1, self.w+self.offset.1, WHITE);
+		draw_rectangle(self.x+self.offset.0, self.y+self.offset.0, self.w+self.offset.1, self.w+self.offset.1, self.color);
 
 		if self.state == CellState::Dead {
 			if draw_grid {
@@ -189,22 +191,38 @@ impl Cell {
 	fn update(&mut self) {
 		self.offset.0 = self.offset.0 + (self.wanted_offset.0 - self.offset.0) / 5.0;
 		self.offset.1 = self.offset.1 + (self.wanted_offset.1 - self.offset.1) / 5.0;
+		
+		match self.state {
+			CellState::Alive => {
+				self.color.a += (1.0 - self.color.a) / 10.0;
+			},
+			CellState::Dead => {
+				self.color.a -= self.color.a / 10.0;
+			}
+		}
+
 	}
 
 	fn kill(&mut self, animations: bool) {
-		self.state = CellState::Dead;
-		self.wanted_offset = (self.w/2.0, -self.w);
-		if !animations {
-			self.offset = self.wanted_offset;
+		if self.state != CellState::Dead {
+			self.state = CellState::Dead;
+			self.wanted_offset = (self.w/2.0, -self.w);
+			if !animations {
+				self.offset = self.wanted_offset;
+			}
 		}
+
 	}
 
 	fn live(&mut self, animations: bool) {
-		self.state = CellState::Alive;
-		self.wanted_offset = (0.0, 0.0);
-		if !animations {
-			self.offset = self.wanted_offset;
+		if self.state != CellState::Alive {
+			self.state = CellState::Alive;
+			self.wanted_offset = (0.0, 0.0);
+			if !animations {
+				self.offset = self.wanted_offset;
+			}
 		}
+
 	}
 	
 }
