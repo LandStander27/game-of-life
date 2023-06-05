@@ -260,7 +260,7 @@ impl Game {
 			paused: true,
 			speed: 0.25,
 			last_update: macroquad::miniquad::date::now(),
-			grid_color: Color { r: 255.0, g: 255.0, b: 255.0, a: 0.35 },
+			grid_color: Color { r: 255.0, g: 255.0, b: 255.0, a: -1.0 },
 			wanted_grid_color: Color { r: 255.0, g: 255.0, b: 255.0, a: 0.35 },
 		};
 	}
@@ -448,6 +448,7 @@ struct Settings {
 	animate_while_sim: bool,
 	animate: bool,
 	size: f32,
+	real_size: f32,
 	clear_screen: bool,
 	paused: bool,
 	swap_buttons: bool,
@@ -463,6 +464,7 @@ impl Settings {
 			speed: 0.75,
 			animate_while_sim: true,
 			size: 20.0,
+			real_size: 20.0,
 			clear_screen: false,
 			paused: true,
 			swap_buttons: false,
@@ -495,11 +497,12 @@ impl Settings {
 					ui.spacing_mut().slider_width = 200.0;
 
 					ui.add(egui::Slider::new(&mut self.speed, 0.05..=1.0).text("Speed").show_value(false));
-					ui.add(egui::Slider::new(&mut self.size, 10.0..=30.0).text("Size").show_value(false));
-
-					if on_web() {
-						ui.checkbox(&mut self.reduce_lag, "Reduce lag");
+					let size = ui.add(egui::Slider::new(&mut self.real_size, 10.0..=30.0).text("Size").show_value(false));
+					if size.drag_released() {
+						self.size = self.real_size;
 					}
+
+					ui.checkbox(&mut self.reduce_lag, "Reduce lag");
 
 					ui.checkbox(&mut self.animate, "Animations");
 					
@@ -532,7 +535,7 @@ Q to clear screen";
 						if ui.button("Clear screen").clicked() {
 							self.clear_screen = true;
 						}
-						if ui.button("Swap").clicked() {
+						if ui.button("Change tool").clicked() {
 							self.swap_buttons = !self.swap_buttons;
 						}
 						// if ui.add(egui::Button::new(if self.paused { "Play" } else { "Pause" }).min_size(egui::Vec2::new(100.0, 24.0))).clicked() {
@@ -557,6 +560,10 @@ Q to clear screen";
 
 #[macroquad::main(window_conf)]
 async fn main() {
+
+	if on_web() {
+		info!("WASM detected.");
+	}
 
 	let mut game = Game::new(20.0);
 	let mut settings = Settings::new();
