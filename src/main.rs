@@ -383,6 +383,9 @@ impl Game {
 
 			if board.iter().any(|x| x.iter().any(|y| y.state == CellState::Alive)) {
 				self.history.push(board.clone());
+				if self.history.len() > 500 {
+					self.history.remove(0);
+				}
 			}
 
 			for x in 0..self.amount.amount_x {
