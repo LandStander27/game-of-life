@@ -431,9 +431,23 @@ impl Game {
 
 	}
 
-	fn go_back(&mut self) {
+	fn go_back(&mut self, animations: bool) {
 		if self.history.len() > 0 {
-			self.cells = self.history.remove(self.history.len()-1);
+
+			let new = self.history.remove(self.history.len()-1);
+			for x in 0..new.len() {
+				for y in 0..new[x].len() {
+					match new[x][y].state {
+						CellState::Alive => {
+							self.get_cell_mut(x as i32, y as i32).unwrap().live(animations);
+						},
+						CellState::Dead => {
+							self.get_cell_mut(x as i32, y as i32).unwrap().kill(animations);
+						}
+					}
+				}
+			}
+
 		}
 	}
 
@@ -671,14 +685,14 @@ async fn main() {
 			if last_rewind.is_some() {
 				if first_rewind {
 					if macroquad::miniquad::date::now() - last_rewind.unwrap() > 0.5 {
-						game.go_back();
+						game.go_back(settings.animate);
 						settings.paused = true;
 						first_rewind = false;
 						last_rewind = Some(macroquad::miniquad::date::now());
 					}
 				} else {
 					if macroquad::miniquad::date::now() - last_rewind.unwrap() > 0.1 {
-						game.go_back();
+						game.go_back(settings.animate);
 						settings.paused = true;
 						first_rewind = false;
 						last_rewind = Some(macroquad::miniquad::date::now());
@@ -686,7 +700,7 @@ async fn main() {
 				}
 
 			} else {
-				game.go_back();
+				game.go_back(settings.animate);
 				settings.paused = true;
 				first_rewind = true;
 				last_rewind = Some(macroquad::miniquad::date::now());
@@ -706,7 +720,7 @@ async fn main() {
 		game.set_pause(settings.paused);
 
 		game.speed = 1.0 - settings.speed;
-		game.update(if !settings.animate { false } else { settings.animate_while_sim });
+		game.update(if settings.paused { settings.animate } else { if !settings.animate { false } else { settings.animate_while_sim } });
 		game.draw();
 		settings.draw(if game.history.len() > 0 { true } else { false });
 
