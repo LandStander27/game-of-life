@@ -1,4 +1,8 @@
 ## Conway's Game of Life
+<p>
+	<img src="https://github.com/landstander27/game-of-life/actions/workflows/build.yml/badge.svg">
+</p>
+
 - GOL made in Rust
 
 ### Playing
