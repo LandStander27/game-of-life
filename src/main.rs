@@ -150,7 +150,7 @@ enum CellState {
 	Dead
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy)]
 struct Cell {
 	x: f32,
 	y: f32,
@@ -238,6 +238,7 @@ struct Game {
 	last_update: f64,
 	grid_color: Color,
 	wanted_grid_color: Color,
+	history: Vec<Vec<Vec<Cell>>>,
 }
 
 impl Game {
@@ -262,6 +263,7 @@ impl Game {
 			last_update: macroquad::miniquad::date::now(),
 			grid_color: Color { r: 255.0, g: 255.0, b: 255.0, a: -1.0 },
 			wanted_grid_color: Color { r: 255.0, g: 255.0, b: 255.0, a: 0.35 },
+			history: Vec::new(),
 		};
 	}
 
@@ -379,6 +381,10 @@ impl Game {
 			self.last_update = macroquad::miniquad::date::now();
 			let board = self.cells.clone();
 
+			if board.iter().any(|x| x.iter().any(|y| y.state == CellState::Alive)) {
+				self.history.push(board.clone());
+			}
+
 			for x in 0..self.amount.amount_x {
 				for y in 0..self.amount.amount_y {
 	
@@ -422,6 +428,12 @@ impl Game {
 
 	}
 
+	fn go_back(&mut self) {
+		if self.history.len() > 0 {
+			self.cells = self.history.remove(self.history.len()-1);
+		}
+	}
+
 	fn clear_screen(&mut self, animations: bool) {
 		for x in self.cells.iter_mut() {
 			for y in x.iter_mut() {
@@ -454,6 +466,7 @@ struct Settings {
 	swap_buttons: bool,
 	reduce_lag: bool,
 	touch_buttons: bool,
+	back_generation: bool,
 }
 
 impl Settings {
@@ -471,10 +484,11 @@ impl Settings {
 			animate: true,
 			reduce_lag: false,
 			touch_buttons: false,
+			back_generation: false,
 		};
 	}
 
-	fn draw(&mut self) {
+	fn draw(&mut self, history_button: bool) {
 		egui_macroquad::ui(|ctx| {
 			self.mouse_over = ctx.is_pointer_over_area() || ctx.is_using_pointer();
 			egui::Window::new("Menu")
@@ -514,7 +528,8 @@ impl Settings {
 "Space to play/pause
 Left click to create
 Right click to remove
-Q to clear screen";
+Q to clear screen
+Left arrow or Ctrl-Z to rewind";
 					for i in controls.split("\n") {
 						ui.label(i);
 					}
@@ -538,6 +553,19 @@ Q to clear screen";
 						if ui.button("Change tool").clicked() {
 							self.swap_buttons = !self.swap_buttons;
 						}
+
+						// let button = ui.button("Rewind");
+
+						// if button.is_pointer_button_down_on() {
+						// 	self.back_generation = true;
+						// } else {
+						// 	self.back_generation = false;
+						// }
+
+						if ui.add_enabled(history_button, egui::Button::new("Rewind")).clicked() {
+							self.back_generation = true;
+						}
+
 						// if ui.add(egui::Button::new(if self.paused { "Play" } else { "Pause" }).min_size(egui::Vec2::new(100.0, 24.0))).clicked() {
 						// 	self.paused = !self.paused;
 						// }
@@ -569,6 +597,9 @@ async fn main() {
 	let mut settings = Settings::new();
 
 	let mut last_mouse_pos: Option<(f32, f32)> = None;
+
+	let mut last_rewind: Option<f64> = None;
+	let mut first_rewind: bool = false;
 
 	loop {
 
@@ -632,6 +663,39 @@ async fn main() {
 			last_mouse_pos = None;
 		}
 
+		if is_key_down(KeyCode::Left) || (is_key_down(KeyCode::Z) && is_key_down(KeyCode::LeftControl)) || settings.back_generation {
+
+			if last_rewind.is_some() {
+				if first_rewind {
+					if macroquad::miniquad::date::now() - last_rewind.unwrap() > 0.5 {
+						game.go_back();
+						settings.paused = true;
+						first_rewind = false;
+						last_rewind = Some(macroquad::miniquad::date::now());
+					}
+				} else {
+					if macroquad::miniquad::date::now() - last_rewind.unwrap() > 0.1 {
+						game.go_back();
+						settings.paused = true;
+						first_rewind = false;
+						last_rewind = Some(macroquad::miniquad::date::now());
+					}
+				}
+
+			} else {
+				game.go_back();
+				settings.paused = true;
+				first_rewind = true;
+				last_rewind = Some(macroquad::miniquad::date::now());
+			}
+
+			settings.back_generation = false;
+			
+		} else {
+			last_rewind = None;
+			settings.back_generation = false;
+		}
+
 		if is_key_pressed(KeyCode::Space) {
 			game.toggle_pause();
 			settings.paused = game.paused;
@@ -641,7 +705,7 @@ async fn main() {
 		game.speed = 1.0 - settings.speed;
 		game.update(if !settings.animate { false } else { settings.animate_while_sim });
 		game.draw();
-		settings.draw();
+		settings.draw(if game.history.len() > 0 { true } else { false });
 
 		next_frame().await;
 
