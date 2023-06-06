@@ -20,5 +20,5 @@
 #### Building from source
 - Install [Rust](https://www.rust-lang.org/)
 - Clone the repo
-- Run `cargo b --release`
+- Run `cargo b --release`.
 - End binary will be in `.\target\release\gol.exe`
